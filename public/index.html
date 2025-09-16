@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChatConnect - Chat Temps Réel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .message-animation {
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .typing-indicator {
+            animation: pulse 1.5s infinite;
+        }
+        .online-dot {
+            animation: pulse 2s infinite;
+        }
+        .code-highlight {
+            background: linear-gradient(45deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .dark-mode {
+            background: linear-gradient(135deg, #1f2937, #111827);
+            color: white;
+        }
+        .dark-mode .bg-white {
+            background-color: #374151 !important;
+            color: white;
+        }
+        .dark-mode .text-gray-800 {
+            color: #f3f4f6 !important;
+        }
+        .dark-mode .text-gray-600 {
+            color: #d1d5db !important;
+        }
+        .dark-mode .border-gray-300 {
+            border-color: #4b5563 !important;
+        }
+        .dark-mode .bg-gray-50 {
+            background-color: #4b5563 !important;
+        }
+        .dark-mode .bg-gray-100 {
+            background-color: #6b7280 !important;
+        }
+        .reaction-btn {
+            transition: all 0.2s ease;
+        }
+        .reaction-btn:hover {
+            transform: scale(1.2);
+        }
+        .notification {
+            animation: slideInRight 0.3s ease-out;
+        }
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .connection-status {
+            transition: all 0.3s ease;
+        }
+        .avatar-btn.selected {
+            background: linear-gradient(45deg, #3b82f6, #8b5cf6);
+            color: white;
+        }
+        .theme-color-btn.selected {
+            border-color: #374151 !important;
+            border-width: 3px;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen transition-all duration-300">
+    <!-- Notifications -->
+    <div id="notifications" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    <!-- Statut de connexion -->
+    <div id="connectionStatus" class="fixed top-4 left-4 z-50 px-3 py-2 rounded-lg text-sm font-medium connection-status bg-green-100 text-green-800">
+        🟢 Connecté
+    </div>
+
+    <div class="container mx-auto max-w-4xl h-screen flex flex-col p-4">
+        <!-- Header -->
+        <div class="bg-white shadow-lg rounded-2xl p-4 mb-4 transition-all duration-300">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                        <span class="text-white font-bold text-lg">💬</span>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold text-gray-800">ChatConnect</h1>
+                        <p class="text-sm text-gray-500" id="roomInfo">Chat temps réel avec vos amis</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <div class="online-dot w-3 h-3 bg-green-500 rounded-full"></div>
+                    <span class="text-sm text-gray-600" id="onlineCount">En ligne</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Zone de configuration -->
+        <div id="setupArea" class="space-y-4">
+            <!-- Choix du mode -->
+            <div id="modeSelection" class="bg-white rounded-2xl shadow-lg p-6 transition-all duration-300">
+                <h2 class="text-lg font-semibold text-gray-800 mb-4">Comment voulez-vous utiliser ChatConnect ?</h2>
+                <div class="space-y-4">
+                    <button onclick="selectGuestMode()" class="w-full p-4 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 text-left">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+                                <span class="text-xl">👤</span>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-gray-800">Mode Invité</h3>
+                                <p class="text-sm text-gray-600">Rapide et simple - juste un nom d'utilisateur</p>
+                            </div>
+                        </div>
+                    </button>
+                    
+                    <button onclick="selectAccountMode()" class="w-full p-4 border-2 border-gray-200 rounded-xl hover:border-purple-500 hover:bg-purple-50 transition-all duration-200 text-left">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                                <span class="text-xl text-white">⭐</span>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-gray-800">Créer un Compte</h3>
+                                <p class="text-sm text-gray-600">Avatar, bio, historique des messages</p>
+                            </div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Mode Invité -->
+            <div id="guestSetup" class="hidden bg-white rounded-2xl shadow-lg p-6 transition-all duration-300">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-semibold text-gray-800">Mode Invité</h2>
+                    <button onclick="backToModeSelection()" class="text-gray-500 hover:text-gray-700 text-sm">← Retour</button>
+                </div>
+                <div class="flex space-x-3">
+                    <input type="text" id="guestUsernameInput" placeholder="Votre nom..." 
+                           class="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200">
+                    <button onclick="setGuestUsername()" 
+                            class="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-200 font-medium">
+                        Continuer
+                    </button>
+                </div>
+            </div>
+
+            <!-- Création de compte -->
+            <div id="accountSetup" class="hidden bg-white rounded-2xl shadow-lg p-6 transition-all duration-300">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-semibold text-gray-800">Créer votre compte</h2>
+                    <button onclick="backToModeSelection()" class="text-gray-500 hover:text-gray-700 text-sm">← Retour</button>
+                </div>
+                
+                <!-- Avatar Selection -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Choisissez votre avatar</label>
+                    <div class="grid grid-cols-6 gap-3" id="avatarSelection">
+                        <button onclick="selectAvatar('👤')" class="avatar-btn selected w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-xl hover:bg-blue-100 transition-colors">👤</button>
+                        <button onclick="selectAvatar('😊')" class="avatar-btn w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-xl hover:bg-blue-100 transition-colors">😊</button>
+                        <button onclick="selectAvatar('😎')" class="avatar-btn w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-xl hover:bg-blue-100 transition-colors">😎</button>
+                        <button onclick="selectAvatar('🤓')" class="avatar-btn w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-xl hover:bg-blue-100 transition-colors">🤓</button>
+                        <button onclick="selectAvatar('🥳')" class="avatar-btn w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-xl hover:bg-blue-100 transition-colors">🥳</button>
+                        <button onclick="selectAvatar('🚀')" class="avatar-btn w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-xl hover:bg-blue-100 transition-colors">🚀</button>
+                        <button onclick="selectAvatar('🎮')" class="avatar-btn w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-xl hover:bg-blue-100 transition-colors">🎮</button>
+                        <button onclick="selectAvatar('🎵')" class="avatar-btn w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-xl hover:bg-blue-100 transition-colors">🎵</button>
+                        <button onclick="selectAvatar('⚡')" class="avatar-btn w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-xl hover:bg-blue-100 transition-colors">⚡</button>
+                        <button onclick="selectAvatar('🌟')" class="avatar-btn w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-xl hover:bg-blue-100 transition-colors">🌟</button>
+                        <button onclick="selectAvatar('🔥')" class="avatar-btn w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-xl hover:bg-blue-100 transition-colors">🔥</button>
+                        <button onclick="selectAvatar('💎')" class="avatar-btn w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-xl hover:bg-blue-100 transition-colors">💎</button>
+                    </div>
+                </div>
+
+                <!-- Nom d'utilisateur -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Nom d'utilisateur</label>
+                    <input type="text" id="accountUsernameInput" placeholder="Votre nom..." 
+                           class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200">
+                </div>
+
+                <!-- Bio -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Bio (optionnelle)</label>
+                    <textarea id="userBio" placeholder="Parlez-nous de vous..." rows="2"
+                              class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 resize-none"></textarea>
+                </div>
+
+                <!-- Couleur de thème -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Couleur de thème</label>
+                    <div class="flex space-x-3">
+                        <button onclick="selectThemeColor('blue')" class="theme-color-btn selected w-8 h-8 bg-blue-500 rounded-full border-2 border-transparent hover:border-gray-400 transition-colors"></button>
+                        <button onclick="selectThemeColor('purple')" class="theme-color-btn w-8 h-8 bg-purple-500 rounded-full border-2 border-transparent hover:border-gray-400 transition-colors"></button>
+                        <button onclick="selectThemeColor('green')" class="theme-color-btn w-8 h-8 bg-green-500 rounded-full border-2 border-transparent hover:border-gray-400 transition-colors"></button>
+                        <button onclick="selectThemeColor('red')" class="theme-color-btn w-8 h-8 bg-red-500 rounded-full border-2 border-transparent hover:border-gray-400 transition-colors"></button>
+                        <button onclick="selectThemeColor('yellow')" class="theme-color-btn w-8 h-8 bg-yellow-500 rounded-full border-2 border-transparent hover:border-gray-400 transition-colors"></button>
+                        <button onclick="selectThemeColor('pink')" class="theme-color-btn w-8 h-8 bg-pink-500 rounded-full border-2 border-transparent hover:border-gray-400 transition-colors"></button>
+                    </div>
+                </div>
+
+                <button onclick="createAccount()" 
+                        class="w-full px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-xl hover:from-purple-600 hover:to-pink-700 transition-all duration-200 font-medium">
+                    Créer mon compte
+                </button>
+            </div>
+
+            <!-- Sélection de salle -->
+            <div id="roomSetup" class="hidden bg-white rounded-2xl shadow-lg p-6 transition-all duration-300">
+                <h2 class="text-lg font-semibold text-gray-800 mb-4">Rejoindre ou créer une salle</h2>
+                
+                <!-- Créer une nouvelle salle -->
+                <div class="mb-6 p-4 bg-blue-50 rounded-xl">
+                    <h3 class="font-medium text-gray-800 mb-3">🆕 Créer une nouvelle salle privée</h3>
+                    <div class="flex space-x-3 mb-3">
+                        <input type="text" id="newRoomName" placeholder="Nom de la salle..." 
+                               class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200">
+                        <button onclick="createRoom()" 
+                                class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                            Créer
+                        </button>
+                    </div>
+                    <p class="text-sm text-gray-600">💡 Vous recevrez un code à partager avec vos amis</p>
+                </div>
+
+                <!-- Rejoindre avec un code -->
+                <div class="mb-6 p-4 bg-green-50 rounded-xl">
+                    <h3 class="font-medium text-gray-800 mb-3">🔑 Rejoindre avec un code d'invitation</h3>
+                    <div class="flex space-x-3 mb-3">
+                        <input type="text" id="roomCodeInput" placeholder="Ex: ABC123" 
+                               class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 uppercase transition-all duration-200">
+                        <button onclick="joinRoomByCode()" 
+                                class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
+                            Rejoindre
+                        </button>
+                    </div>
+                    <p class="text-sm text-gray-600">💡 Demandez le code à votre ami qui a créé la salle</p>
+                </div>
+
+                <!-- Salles publiques -->
+                <div class="p-4 bg-gray-50 rounded-xl">
+                    <h3 class="font-medium text-gray-800 mb-3">🌍 Salles publiques</h3>
+                    <div id="publicRooms" class="space-y-2">
+                        <button onclick="joinRoom('general', 'Salon Général')" 
+                                class="w-full text-left px-3 py-2 bg-white rounded-lg hover:bg-gray-100 transition-colors border">
+                            <div class="font-medium">Salon Général</div>
+                            <div class="text-sm text-gray-500">Discussion ouverte à tous</div>
+                        </button>
+                        <button onclick="joinRoom('gaming', 'Gaming Zone')" 
+                                class="w-full text-left px-3 py-2 bg-white rounded-lg hover:bg-gray-100 transition-colors border">
+                            <div class="font-medium">Gaming Zone 🎮</div>
+                            <div class="text-sm text-gray-500">Pour les passionnés de jeux</div>
+                        </button>
+                        <button onclick="joinRoom('music', 'Musique & Arts')" 
+                                class="w-full text-left px-3 py-2 bg-white rounded-lg hover:bg-gray-100 transition-colors border">
+                            <div class="font-medium">Musique & Arts 🎵</div>
+                            <div class="text-sm text-gray-500">Partagez vos créations</div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Zone de chat -->
+        <div id="chatArea" class="hidden flex-1 flex flex-col">
+            <!-- Info de la salle -->
+            <div id="roomInfoBar" class="bg-white rounded-2xl shadow-lg p-4 mb-4 transition-all duration-300">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="font-semibold text-gray-800" id="currentRoomName">Salon</h3>
+                        <p class="text-sm text-gray-500" id="roomDescription">Description de la salle</p>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <div id="roomCodeDisplay" class="hidden bg-gradient-to-r from-blue-500 to-purple-600 text-white px-3 py-1 rounded-lg text-sm font-mono">
+                            Code: <span class="font-bold" id="displayedCode"></span>
+                        </div>
+                        <button onclick="copyRoomCode()" id="copyCodeBtn" class="hidden text-blue-500 hover:text-blue-700 text-sm transition-colors">
+                            📋 Copier
+                        </button>
+                        <button onclick="leaveRoom()" class="text-red-500 hover:text-red-700 text-sm transition-colors">
+                            🚪 Quitter
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Messages -->
+            <div class="flex-1 bg-white rounded-2xl shadow-lg mb-4 flex flex-col transition-all duration-300">
+                <div id="messagesContainer" class="flex-1 p-4 overflow-y-auto space-y-3 max-h-96">
+                    <!-- Messages apparaîtront ici -->
+                </div>
+                <div id="typingIndicator" class="hidden px-4 py-2 text-sm text-gray-500 italic typing-indicator">
+                    <span id="typingUsers"></span> est en train d'écrire...
+                </div>
+            </div>
+
+            <!-- Zone de saisie -->
+            <div class="bg-white rounded-2xl shadow-lg p-4 transition-all duration-300">
+                <div class="flex space-x-2">
+                    <button onclick="toggleEmojiPicker()" class="px-3 py-3 text-gray-500 hover:text-gray-700 rounded-xl hover:bg-gray-100 transition-colors">
+                        😊
+                    </button>
+                    <input type="text" id="messageInput" placeholder="Tapez votre message..." 
+                           class="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                           onkeypress="handleKeyPress(event)" oninput="handleTyping()">
+                    <button onclick="sendMessage()" 
+                            class="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-200 font-medium">
+                        Envoyer
+                    </button>
+                </div>
+                
+                <!-- Sélecteur d'emojis -->
+                <div id="emojiPicker" class="hidden mt-3 p-3 bg-gray-50 rounded-xl">
+                    <div class="grid grid-cols-8 gap-2 text-xl">
+                        <button onclick="addEmoji('😀')" class="hover:bg-gray-200 p-1 rounded transition-colors">😀</button>
+                        <button onclick="addEmoji('😂')" class="hover:bg-gray-200 p-1 rounded transition-colors">😂</button>
+                        <button onclick="addEmoji('😍')" class="hover:bg-gray-200 p-1 rounded transition-colors">😍</button>
+                        <button onclick="addEmoji('🤔')" class="hover:bg-gray-200 p-1 rounded transition-colors">🤔</button>
+                        <button onclick="addEmoji('👍')" class="hover:bg-gray-200 p-1 rounded transition-colors">👍</button>
+                        <button onclick="addEmoji('👎')" class="hover:bg-gray-200 p-1 rounded transition-colors">👎</button>
+                        <button onclick="addEmoji('❤️')" class="hover:bg-gray-200 p-1 rounded transition-colors">❤️</button>
+                        <button onclick="addEmoji('🔥')" class="hover:bg-gray-200 p-1 rounded transition-colors">🔥</button>
+                        <button onclick="addEmoji('🎉')" class="hover:bg-gray-200 p-1 rounded transition-colors">🎉</button>
+                        <button onclick="addEmoji('😎')" class="hover:bg-gray-200 p-1 rounded transition-colors">😎</button>
+                        <button onclick="addEmoji('🤝')" class="hover:bg-gray-200 p-1 rounded transition-colors">🤝</button>
+                        <button onclick="addEmoji('💪')" class="hover:bg-gray-200 p-1 rounded transition-colors">💪</button>
+                        <button onclick="addEmoji('🎮')" class="hover:bg-gray-200 p-1 rounded transition-colors">🎮</button>
+                        <button onclick="addEmoji('🎵')" class="hover:bg-gray-200 p-1 rounded transition-colors">🎵</button>
+                        <button onclick="addEmoji('⚡')" class="hover:bg-gray-200 p-1 rounded transition-colors">⚡</button>
+                        <button onclick="addEmoji('🌟')" class="hover:bg-gray-200 p-1 rounded transition-colors">🌟</button>
+                    </div>
+                </div>
+                
+                <div class="flex items-center justify-between mt-3 text-sm text-gray-500">
+                    <div class="flex items-center space-x-2">
+                        <span id="userAvatar" class="text-lg">👤</span>
+                        <span>Connecté en tant que <strong id="currentUsername"></strong></span>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <button onclick="toggleDarkMode()" class="text-gray-500 hover:text-gray-700 transition-colors" id="darkModeBtn">🌙</button>
+                        <button onclick="toggleNotifications()" class="text-gray-500 hover:text-gray-700 transition-colors" id="notifBtn">🔔</button>
+                        <span id="memberCount">Chargement...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de succès -->
+    <div id="successModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-2xl p-6 max-w-md mx-4">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span class="text-2xl">🎉</span>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-800 mb-2">Salle créée avec succès !</h3>
+                <p class="text-gray-600 mb-4">Partagez ce code avec vos amis :</p>
+                <div class="bg-gray-100 rounded-lg p-4 mb-4">
+                    <div class="text-2xl font-bold code-highlight" id="modalRoomCode">ABC123</div>
+                </div>
+                <div class="flex space-x-3">
+                    <button onclick="copyCodeFromModal()" class="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                        📋 Copier le code
+                    </button>
+                    <button onclick="closeModal()" class="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors">
+                        Fermer
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = '';
+        let currentRoom = '';
+        let currentRoomName = '';
+        let currentRoomCode = '';
+        let isDarkMode = false;
+        let notificationsEnabled = true;
+        let typingTimeout;
+        let isTypingShown = false;
+        let userId = '';
+        let userAccount = null;
+        let selectedAvatar = '👤';
+        let selectedThemeColor = 'blue';
+        let messages = {};
+        let roomUsers = {};
+        let typingUsers = {};
+
+        // Générer un ID unique pour l'utilisateur
+        function generateUserId() {
+            return 'user_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+        }
+
+        function updateConnectionStatus(connected) {
+            const status = document.getElementById('connectionStatus');
+            if (connected) {
+                status.className = 'fixed top-4 left-4 z-50 px-3 py-2 rounded-lg text-sm font-medium connection-status bg-green-100 text-green-800';
+                status.textContent = '🟢 Connecté';
+            } else {
+                status.className = 'fixed top-4 left-4 z-50 px-3 py-2 rounded-lg text-sm font-medium connection-status bg-red-100 text-red-800';
+                status.textContent = '🔴 Déconnecté';
+            }
+        }
+
+        // Système de stockage local pour les messages
+        function saveToStorage(key, data) {
+            try {
+                localStorage.setItem(key, JSON.stringify(data));
+            } catch (e) {
+                console.log('Stockage local non disponible');
+            }
+        }
+
+        function loadFromStorage(key) {
+            try {
+                const data = localStorage.getItem(key);
+                return data ? JSON.parse(data) : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        // Simuler la synchronisation entre onglets
+        function syncData() {
+            if (currentRoom) {
+                const roomMessages = loadFromStorage(`messages_${currentRoom}`) || {};
+                const roomUsersData = loadFromStorage(`users_${currentRoom}`) || {};
+                
+                displayMessages(roomMessages);
+                updateMemberCount(roomUsersData);
+            }
+        }
+
+        // Écouter les changements dans le stockage local (synchronisation entre onglets)
+        window.addEventListener('storage', function(e) {
+            if (e.key && e.key.startsWith('messages_') && e.key.includes(currentRoom)) {
+                syncData();
+            }
+        });
+
+        // Fonctions pour la sélection du mode
+        function selectGuestMode() {
+            document.getElementById('modeSelection').classList.add('hidden');
+            document.getElementById('guestSetup').classList.remove('hidden');
+        }
+
+        function selectAccountMode() {
+            document.getElementById('modeSelection').classList.add('hidden');
+            document.getElementById('accountSetup').classList.remove('hidden');
+        }
+
+        function backToModeSelection() {
+            document.getElementById('guestSetup').classList.add('hidden');
+            document.getElementById('accountSetup').classList.add('hidden');
+            document.getElementById('modeSelection').classList.remove('hidden');
+        }
+
+        function selectAvatar(avatar) {
+            selectedAvatar = avatar;
+            document.querySelectorAll('.avatar-btn').forEach(btn => btn.classList.remove('selected'));
+            event.target.classList.add('selected');
+        }
+
+        function selectThemeColor(color) {
+            selectedThemeColor = color;
+            document.querySelectorAll('.theme-color-btn').forEach(btn => btn.classList.remove('selected'));
+            event.target.classList.add('selected');
+        }
+
+        function setGuestUsername() {
+            const username = document.getElementById('guestUsernameInput').value.trim();
+            if (username) {
+                currentUser = username;
+                userId = generateUserId();
+                userAccount = {
+                    type: 'guest',
+                    username: username,
+                    avatar: '👤',
+                    themeColor: 'blue'
+                };
+                
+                document.getElementById('currentUsername').textContent = username;
+                document.getElementById('userAvatar').textContent = '👤';
+                document.getElementById('guestSetup').classList.add('hidden');
+                document.getElementById('roomSetup').classList.remove('hidden');
+                showNotification('Bienvenue ' + username + ' ! 🎉', 'success');
+            }
+        }
+
+        function createAccount() {
+            const username = document.getElementById('accountUsernameInput').value.trim();
+            const bio = document.getElementById('userBio').value.trim();
+            
+            if (username) {
+                currentUser = username;
+                userId = generateUserId();
+                userAccount = {
+                    type: 'account',
+                    username: username,
+                    bio: bio,
+                    avatar: selectedAvatar,
+                    themeColor: selectedThemeColor,
+                    createdAt: new Date().toISOString()
+                };
+                
+                document.getElementById('currentUsername').textContent = username;
+                document.getElementById('userAvatar').textContent = selectedAvatar;
+                document.getElementById('accountSetup').classList.add('hidden');
+                document.getElementById('roomSetup').classList.remove('hidden');
+                showNotification('Compte créé avec succès ! ⭐', 'success');
+                
+                // Appliquer le thème
+                applyThemeColor(selectedThemeColor);
+            }
+        }
+
+        function applyThemeColor(color) {
+            const colorMap = {
+                blue: 'from-blue-500 to-blue-600',
+                purple: 'from-purple-500 to-purple-600',
+                green: 'from-green-500 to-green-600',
+                red: 'from-red-500 to-red-600',
+                yellow: 'from-yellow-500 to-yellow-600',
+                pink: 'from-pink-500 to-pink-600'
+            };
+            
+            // Appliquer le thème aux boutons principaux
+            const buttons = document.querySelectorAll('.bg-gradient-to-r');
+            buttons.forEach(btn => {
+                if (btn.classList.contains('from-blue-500') || 
+                    btn.classList.contains('from-purple-500') ||
+                    btn.classList.contains('from-green-500') ||
+                    btn.classList.contains('from-red-500') ||
+                    btn.classList.contains('from-yellow-500') ||
+                    btn.classList.contains('from-pink-500')) {
+                    btn.className = btn.className.replace(/from-\w+-500 to-\w+-600/, colorMap[color]);
+                }
+            });
+        }
+
+        function createRoom() {
+            const roomName = document.getElementById('newRoomName').value.trim();
+            if (roomName) {
+                const roomCode = generateRoomCode();
+                const roomId = 'private_' + roomCode.toLowerCase();
+                
+                // Sauvegarder la salle
+                const roomData = {
+                    name: roomName,
+                    description: 'Salle privée',
+                    isPrivate: true,
+                    code: roomCode,
+                    createdAt: Date.now(),
+                    createdBy: currentUser
+                };
+                
+                saveToStorage(`room_${roomId}`, roomData);
+
+                currentRoomCode = roomCode;
+                document.getElementById('modalRoomCode').textContent = roomCode;
+                document.getElementById('successModal').classList.remove('hidden');
+                
+                joinRoom(roomId, roomName, roomCode);
+            }
+        }
+
+        function joinRoomByCode() {
+            const code = document.getElementById('roomCodeInput').value.trim().toUpperCase();
+            if (code) {
+                const roomId = 'private_' + code.toLowerCase();
+                const roomData = loadFromStorage(`room_${roomId}`);
+                
+                if (roomData) {
+                    joinRoom(roomId, roomData.name, code);
+                } else {
+                    showNotification('Code de salle invalide ! 😞', 'error');
+                }
+            }
+        }
+
+        function joinRoom(roomId, roomName, roomCode = null) {
+            currentRoom = roomId;
+            currentRoomName = roomName;
+            currentRoomCode = roomCode;
+            
+            document.getElementById('setupArea').classList.add('hidden');
+            document.getElementById('chatArea').classList.remove('hidden');
+            
+            document.getElementById('currentRoomName').textContent = roomName;
+            document.getElementById('roomDescription').textContent = roomCode ? 'Salle privée' : 'Salle publique';
+            
+            if (roomCode) {
+                document.getElementById('roomCodeDisplay').classList.remove('hidden');
+                document.getElementById('copyCodeBtn').classList.remove('hidden');
+                document.getElementById('displayedCode').textContent = roomCode;
+            } else {
+                document.getElementById('roomCodeDisplay').classList.add('hidden');
+                document.getElementById('copyCodeBtn').classList.add('hidden');
+            }
+            
+            // Ajouter l'utilisateur à la salle
+            const currentUsers = loadFromStorage(`users_${roomId}`) || {};
+            currentUsers[userId] = {
+                name: currentUser,
+                avatar: userAccount ? userAccount.avatar : '👤',
+                bio: userAccount ? userAccount.bio : '',
+                accountType: userAccount ? userAccount.type : 'guest',
+                joinedAt: Date.now(),
+                isOnline: true
+            };
+            saveToStorage(`users_${roomId}`, currentUsers);
+            
+            // Charger les messages existants
+            const existingMessages = loadFromStorage(`messages_${roomId}`) || {};
+            displayMessages(existingMessages);
+            updateMemberCount(currentUsers);
+            
+            // Message de bienvenue
+            addSystemMessage(`${currentUser} a rejoint la salle`);
+            showNotification('Vous avez rejoint ' + roomName + ' ! 🚀', 'success');
+            
+            // Démarrer la synchronisation
+            setInterval(syncData, 1000);
+        }
+
+        function leaveRoom() {
+            if (currentRoom) {
+                // Supprimer l'utilisateur de la salle
+                const currentUsers = loadFromStorage(`users_${currentRoom}`) || {};
+                delete currentUsers[userId];
+                saveToStorage(`users_${currentRoom}`, currentUsers);
+                
+                // Message de départ
+                addSystemMessage(`${currentUser} a quitté la salle`);
+            }
+            
+            document.getElementById('chatArea').classList.add('hidden');
+            document.getElementById('setupArea').classList.remove('hidden');
+            document.getElementById('roomSetup').classList.remove('hidden');
+            
+            showNotification('Vous avez quitté la salle 👋', 'info');
+            currentRoom = '';
+            currentRoomName = '';
+            currentRoomCode = '';
+        }
+
+        function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
+            
+            if (message && currentUser && currentRoom) {
+                const messageData = {
+                    user: currentUser,
+                    userId: userId,
+                    avatar: userAccount ? userAccount.avatar : '👤',
+                    accountType: userAccount ? userAccount.type : 'guest',
+                    message: message,
+                    timestamp: Date.now(),
+                    reactions: {}
+                };
+                
+                // Sauvegarder le message
+                const roomMessages = loadFromStorage(`messages_${currentRoom}`) || {};
+                const messageId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                roomMessages[messageId] = messageData;
+                saveToStorage(`messages_${currentRoom}`, roomMessages);
+                
+                // Afficher immédiatement
+                displayMessages(roomMessages);
+                
+                messageInput.value = '';
+                document.getElementById('emojiPicker').classList.add('hidden');
+                
+                showNotification('Message envoyé ! 📤', 'success');
+            }
+        }
+
+        function addSystemMessage(message) {
+            if (currentRoom) {
+                const messageData = {
+                    user: 'Système',
+                    userId: 'system',
+                    avatar: '🤖',
+                    message: message,
+                    timestamp: Date.now(),
+                    isSystem: true
+                };
+                
+                const roomMessages = loadFromStorage(`messages_${currentRoom}`) || {};
+                const messageId = 'sys_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                roomMessages[messageId] = messageData;
+                saveToStorage(`messages_${currentRoom}`, roomMessages);
+                
+                displayMessages(roomMessages);
+            }
+        }
+
+        function displayMessages(messagesData) {
+            const container = document.getElementById('messagesContainer');
+            container.innerHTML = '';
+            
+            // Convertir en array et trier par timestamp
+            const messages = Object.entries(messagesData).map(([id, msg]) => ({
+                id,
+                ...msg
+            })).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+            
+            messages.forEach(msg => {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message-animation';
+                
+                const isCurrentUser = msg.userId === userId;
+                const isSystem = msg.isSystem;
+                
+                if (isSystem) {
+                    messageDiv.innerHTML = `
+                        <div class="text-center">
+                            <span class="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-sm">
+                                ${msg.message}
+                            </span>
+                        </div>
+                    `;
+                } else {
+                    const reactions = msg.reactions || {};
+                    const reactionsHtml = Object.keys(reactions).length > 0 ? 
+                        `<div class="flex flex-wrap gap-1 mt-2">
+                            ${Object.entries(reactions).map(([emoji, users]) => 
+                                `<span class="bg-gray-100 px-2 py-1 rounded-full text-xs flex items-center space-x-1">
+                                    <span>${emoji}</span><span>${Object.keys(users).length}</span>
+                                </span>`
+                            ).join('')}
+                        </div>` : '';
+                    
+                    const timestamp = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
+                    const avatar = msg.avatar || '👤';
+                    const accountBadge = msg.accountType === 'account' ? '⭐' : '';
+                    
+                    messageDiv.innerHTML = `
+                        <div class="flex ${isCurrentUser ? 'justify-end' : 'justify-start'}">
+                            <div class="max-w-xs lg:max-w-md">
+                                ${!isCurrentUser ? `
+                                    <div class="text-sm text-gray-600 mb-1 font-medium flex items-center space-x-1">
+                                        <span>${avatar}</span>
+                                        <span>${msg.user}</span>
+                                        ${accountBadge ? `<span class="text-xs">${accountBadge}</span>` : ''}
+                                    </div>
+                                ` : ''}
+                                <div class="group relative">
+                                    <div class="px-4 py-2 rounded-2xl ${isCurrentUser 
+                                        ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white' 
+                                        : 'bg-gray-100 text-gray-800'}">
+                                        ${msg.message}
+                                    </div>
+                                    ${!isCurrentUser ? `
+                                        <div class="hidden group-hover:flex absolute -right-2 top-0 space-x-1">
+                                            <button onclick="addReaction('${msg.id}', '👍')" class="reaction-btn bg-white shadow-lg rounded-full p-1 text-sm hover:bg-gray-50">👍</button>
+                                            <button onclick="addReaction('${msg.id}', '❤️')" class="reaction-btn bg-white shadow-lg rounded-full p-1 text-sm hover:bg-gray-50">❤️</button>
+                                            <button onclick="addReaction('${msg.id}', '😂')" class="reaction-btn bg-white shadow-lg rounded-full p-1 text-sm hover:bg-gray-50">😂</button>
+                                        </div>
+                                    ` : ''}
+                                    ${reactionsHtml}
+                                </div>
+                                <div class="text-xs text-gray-500 mt-1 ${isCurrentUser ? 'text-right' : 'text-left'}">
+                                    ${timestamp}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                container.appendChild(messageDiv);
+            });
+            
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function addReaction(messageId, emoji) {
+            if (currentRoom) {
+                const roomMessages = loadFromStorage(`messages_${currentRoom}`) || {};
+                if (roomMessages[messageId]) {
+                    if (!roomMessages[messageId].reactions) {
+                        roomMessages[messageId].reactions = {};
+                    }
+                    if (!roomMessages[messageId].reactions[emoji]) {
+                        roomMessages[messageId].reactions[emoji] = {};
+                    }
+                    
+                    roomMessages[messageId].reactions[emoji][userId] = {
+                        user: currentUser,
+                        timestamp: Date.now()
+                    };
+                    
+                    saveToStorage(`messages_${currentRoom}`, roomMessages);
+                    displayMessages(roomMessages);
+                    showNotification('Réaction ajoutée ! ' + emoji, 'success');
+                }
+            }
+        }
+
+        function handleTyping() {
+            // Simuler l'indicateur de frappe
+            const indicator = document.getElementById('typingIndicator');
+            const usersSpan = document.getElementById('typingUsers');
+            
+            clearTimeout(typingTimeout);
+            typingTimeout = setTimeout(() => {
+                indicator.classList.add('hidden');
+            }, 2000);
+        }
+
+        function updateMemberCount(usersData) {
+            const onlineUsers = Object.values(usersData || {}).filter(user => user.isOnline);
+            const count = onlineUsers.length;
+            document.getElementById('memberCount').textContent = `${count} membre${count > 1 ? 's' : ''}`;
+            document.getElementById('onlineCount').textContent = `${count} en ligne`;
+        }
+
+        function generateRoomCode() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let result = '';
+            for (let i = 0; i < 6; i++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return result;
+        }
+
+        function copyRoomCode() {
+            if (currentRoomCode) {
+                navigator.clipboard.writeText(currentRoomCode).then(() => {
+                    showNotification('Code copié ! 📋', 'success');
+                });
+            }
+        }
+
+        function copyCodeFromModal() {
+            const code = document.getElementById('modalRoomCode').textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                showNotification('Code copié ! Partagez-le avec vos amis 📋', 'success');
+            });
+        }
+
+        function closeModal() {
+            document.getElementById('successModal').classList.add('hidden');
+        }
+
+        function toggleEmojiPicker() {
+            const picker = document.getElementById('emojiPicker');
+            picker.classList.toggle('hidden');
+        }
+
+        function addEmoji(emoji) {
+            const input = document.getElementById('messageInput');
+            input.value += emoji;
+            input.focus();
+        }
+
+        function toggleDarkMode() {
+            isDarkMode = !isDarkMode;
+            document.body.classList.toggle('dark-mode');
+            const btn = document.getElementById('darkModeBtn');
+            btn.textContent = isDarkMode ? '☀️' : '🌙';
+            showNotification(isDarkMode ? 'Mode sombre activé 🌙' : 'Mode clair activé ☀️', 'info');
+        }
+
+        function toggleNotifications() {
+            notificationsEnabled = !notificationsEnabled;
+            const btn = document.getElementById('notifBtn');
+            btn.textContent = notificationsEnabled ? '🔔' : '🔕';
+            showNotification(notificationsEnabled ? 'Notifications activées 🔔' : 'Notifications désactivées 🔕', 'info');
+        }
+
+        function showNotification(message, type = 'info') {
+            if (!notificationsEnabled) return;
+            
+            const notification = document.createElement('div');
+            notification.className = `notification bg-white border-l-4 p-4 rounded-lg shadow-lg max-w-sm ${
+                type === 'success' ? 'border-green-500' : 
+                type === 'error' ? 'border-red-500' : 
+                'border-blue-500'
+            }`;
+            
+            notification.innerHTML = `
+                <div class="flex items-center">
+                    <span class="text-sm font-medium text-gray-800">${message}</span>
+                    <button onclick="this.parentElement.parentElement.remove()" class="ml-2 text-gray-400 hover:text-gray-600">×</button>
+                </div>
+            `;
+            
+            document.getElementById('notifications').appendChild(notification);
+            
+            setTimeout(() => {
+                if (notification.parentElement) {
+                    notification.remove();
+                }
+            }, 4000);
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        // Convertir les codes en majuscules automatiquement
+        document.getElementById('roomCodeInput').addEventListener('input', function(e) {
+            e.target.value = e.target.value.toUpperCase();
+        });
+
+        // Fermer le sélecteur d'emojis en cliquant ailleurs
+        document.addEventListener('click', function(e) {
+            const emojiPicker = document.getElementById('emojiPicker');
+            const emojiBtn = e.target.closest('button[onclick="toggleEmojiPicker()"]');
+            
+            if (!emojiPicker.contains(e.target) && !emojiBtn) {
+                emojiPicker.classList.add('hidden');
+            }
+        });
+
+        // Simuler la connexion
+        setTimeout(() => {
+            updateConnectionStatus(true);
+        }, 1000);
+    </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'98000106e693e1cd',t:'MTc1ODAyMTkzNS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
