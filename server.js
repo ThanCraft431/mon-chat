@@ -1,23 +1,33 @@
 const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+
 const app = express();
-const http = require("http").createServer(app);
-const io = require("socket.io")(http);
+const server = http.createServer(app);
+const io = new Server(server);
 
-app.use(express.static("public")); // dossier avec frontend
+// On sert les fichiers du dossier "public"
+app.use(express.static("public"));
 
+// Quand un utilisateur se connecte
 io.on("connection", (socket) => {
-  console.log("Un utilisateur est connecté");
+  console.log("✅ Un utilisateur est connecté");
 
   // Quand un utilisateur envoie un message
   socket.on("chat message", (msg) => {
-    // On envoie le message à tous les utilisateurs connectés
+    console.log("💬 Message reçu :", msg);
+    // On renvoie à tout le monde
     io.emit("chat message", msg);
   });
 
+  // Quand un utilisateur se déconnecte
   socket.on("disconnect", () => {
-    console.log("Un utilisateur s'est déconnecté");
+    console.log("❌ Un utilisateur s'est déconnecté");
   });
 });
 
+// Render fournit le port via process.env.PORT
 const PORT = process.env.PORT || 3000;
-http.listen(PORT, () => console.log(`Serveur lancé sur le port ${PORT}`));
+server.listen(PORT, () => {
+  console.log(`🚀 Serveur lancé sur le port ${PORT}`);
+});
