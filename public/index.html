@@ -4,33 +4,21 @@
   <meta charset="UTF-8" />
   <title>Mini Skype Clone</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; background: #f3f4f6; color: #333; }
-
-    /* Page de login */
-    #loginPage {
-      height: 100vh; display: flex; align-items: center; justify-content: center;
-      background: #f9fafb;
-    }
+    body { font-family: Arial, sans-serif; margin: 0; background: #f3f4f6; }
+    #loginPage, #app { height: 100vh; display: flex; align-items: center; justify-content: center; }
+    #app { display: none; }
     #loginBox {
       background: white; padding: 2rem; border-radius: 1rem;
       box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 300px; text-align: center;
     }
-    #loginBox h1 { font-size: 1.5rem; margin-bottom: 1rem; }
     #loginBox input, #loginBox button {
-      width: 100%; padding: 0.75rem; margin-top: 0.5rem;
-      border-radius: 0.5rem; border: 1px solid #ddd;
-      font-size: 1rem;
+      width: 100%; padding: 0.75rem; margin-top: 0.5rem; border-radius: 0.5rem;
+      border: 1px solid #ddd; font-size: 1rem;
     }
-    #loginBox button {
-      background: #2563eb; color: white; border: none; cursor: pointer;
-    }
+    #loginBox button { background: #2563eb; color: white; border: none; cursor: pointer; }
     #loginBox button:hover { background: #1d4ed8; }
 
-    /* App */
-    #app {
-      display: none; height: 100vh; display: flex;
-    }
+    #mainApp { display: flex; width: 100%; height: 100%; }
     #sidebar {
       width: 220px; background: white; border-right: 1px solid #ddd;
       display: flex; flex-direction: column; padding: 1rem;
@@ -38,22 +26,13 @@
     #sidebar h2 { font-size: 1.2rem; margin-bottom: 1rem; }
     #contacts { flex: 1; }
     .contact { padding: 0.5rem; margin-bottom: 0.5rem; background: #f3f4f6; border-radius: 0.5rem; }
-    #logout {
-      background: #ef4444; color: white; padding: 0.5rem; border-radius: 0.5rem;
-      text-align: center; cursor: pointer;
-    }
+    #logout { background: #ef4444; color: white; padding: 0.5rem; border-radius: 0.5rem; text-align: center; cursor: pointer; }
     #logout:hover { background: #dc2626; }
 
-    #main {
-      flex: 1; display: flex; flex-direction: column; padding: 1rem; gap: 1rem;
-    }
-
-    /* Zone Chat + Vidéo */
-    #content {
-      flex: 1; display: flex; gap: 1rem;
-    }
+    #content { flex: 1; display: flex; padding: 1rem; gap: 1rem; }
     #chat {
-      flex: 1; background: white; border-radius: 1rem; display: flex; flex-direction: column;
+      flex: 1; background: white; border-radius: 1rem;
+      display: flex; flex-direction: column;
       box-shadow: 0 4px 8px rgba(0,0,0,0.05);
     }
     #messages { flex: 1; padding: 1rem; overflow-y: auto; }
@@ -64,23 +43,6 @@
       border-radius: 0.5rem; padding: 0.5rem 1rem; cursor: pointer;
     }
     #chatInput button:hover { background: #1d4ed8; }
-
-    #videoPanel {
-      width: 50%; background: white; border-radius: 1rem; padding: 1rem;
-      display: flex; flex-direction: column; align-items: center;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.05);
-    }
-    video {
-      width: 100%; height: 250px; background: black; border-radius: 0.5rem; margin-bottom: 0.5rem;
-    }
-    #videoControls button {
-      margin: 0 0.25rem; padding: 0.5rem 1rem; border-radius: 0.5rem;
-      border: none; cursor: pointer;
-    }
-    #callBtn { background: #16a34a; color: white; }
-    #callBtn:hover { background: #15803d; }
-    #hangupBtn { background: #ef4444; color: white; }
-    #hangupBtn:hover { background: #dc2626; }
   </style>
 </head>
 <body>
@@ -94,17 +56,19 @@
   </div>
 </div>
 
-<!-- App principale -->
+<!-- Application -->
 <div id="app">
-  <div id="sidebar">
-    <h2 id="welcome"></h2>
-    <div id="contacts">
-      <div class="contact">Demo Room</div>
+  <div id="mainApp">
+    <!-- Sidebar -->
+    <div id="sidebar">
+      <h2 id="welcome"></h2>
+      <div id="contacts">
+        <div class="contact">Demo Room</div>
+      </div>
+      <div id="logout" onclick="logout()">Déconnexion</div>
     </div>
-    <div id="logout" onclick="logout()">Déconnexion</div>
-  </div>
 
-  <div id="main">
+    <!-- Contenu principal -->
     <div id="content">
       <!-- Chat -->
       <div id="chat">
@@ -114,22 +78,15 @@
           <button onclick="sendMsg()">Envoyer</button>
         </div>
       </div>
-
-      <!-- Vidéo -->
-      <div id="videoPanel">
-        <video id="localVideo" autoplay muted playsinline></video>
-        <video id="remoteVideo" autoplay playsinline></video>
-        <div id="videoControls">
-          <button id="callBtn">Appeler</button>
-          <button id="hangupBtn">Raccrocher</button>
-        </div>
-      </div>
     </div>
   </div>
 </div>
 
+<script src="/socket.io/socket.io.js"></script>
 <script>
   let username = "";
+  const socket = io();
+  const room = "demo-room"; // salle fixe pour tester
 
   function login() {
     const input = document.getElementById("usernameInput");
@@ -139,8 +96,12 @@
     }
     username = input.value;
     document.getElementById("welcome").textContent = "Bonjour " + username;
+
+    // rejoindre la room sur le serveur
+    socket.emit("join", room);
+
     document.getElementById("loginPage").style.display = "none";
-    document.getElementById("app").style.display = "flex";
+    document.getElementById("app").style.display = "block";
   }
 
   function logout() {
@@ -152,12 +113,20 @@
   function sendMsg() {
     const input = document.getElementById("msgInput");
     if (!input.value.trim()) return;
-    const div = document.createElement("div");
-    div.textContent = username + ": " + input.value;
-    document.getElementById("messages").appendChild(div);
+    const message = input.value;
+    socket.emit("chat", { room, message, username });
     input.value = "";
-    document.getElementById("messages").scrollTop = document.getElementById("messages").scrollHeight;
   }
+
+  // recevoir messages du serveur
+  socket.on("chat", (m) => {
+    const div = document.createElement("div");
+    const t = new Date(m.time).toLocaleTimeString();
+    div.textContent = `[${t}] ${m.username}: ${m.message}`;
+    document.getElementById("messages").appendChild(div);
+    document.getElementById("messages").scrollTop =
+      document.getElementById("messages").scrollHeight;
+  });
 </script>
 
 </body>
