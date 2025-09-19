@@ -1,25 +1,204 @@
-<!DOCTYPE html>
-<html lang="fr">
+<!doctype html>
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ChatConnect</title>
-    <style>
-        body { font-family: sans-serif; margin: 20px; }
-        ul { list-style: none; padding: 0; max-height: 400px; overflow-y: auto; }
-        li { margin: 5px 0; }
-        input { padding: 5px; width: 300px; }
-        button { padding: 5px 10px; }
-    </style>
+  <meta charset="utf-8">
+  <title>Proto Appel/Chat WebRTC</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 12px; }
+    #videos { display:flex; gap:8px; }
+    video { width: 320px; height: 240px; background: #000; }
+    #chat { border:1px solid #ccc; padding:8px; width: 660px; height: 200px; overflow:auto; }
+    #controls { margin-top:8px; }
+  </style>
 </head>
 <body>
-    <h1>ChatConnect</h1>
-    <ul id="messages"></ul>
-    <input id="input" autocomplete="off" placeholder="Écrire un message...">
-    <button onclick="sendMessage()">Envoyer</button>
+  <h2>Prototype Appel & Chat</h2>
 
-    <!-- Socket.IO avant ton script -->
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="script.js"></script>
+  <label>Room: <input id="room" value="demo-room"></label>
+  <label>Pseudo: <input id="username" value="Utilisateur"></label>
+  <button id="joinBtn">Rejoindre</button>
+  <button id="startCall" disabled>Démarrer appel</button>
+  <button id="hangup" disabled>Raccrocher</button>
+
+  <div id="videos">
+    <div>
+      <h4>Moi</h4>
+      <video id="localVideo" autoplay muted playsinline></video>
+    </div>
+    <div>
+      <h4>Interlocuteur</h4>
+      <video id="remoteVideo" autoplay playsinline></video>
+    </div>
+  </div>
+
+  <h3>Chat</h3>
+  <div id="chat"></div>
+  <div id="controls">
+    <input id="msg" placeholder="Tapez un message..." style="width:500px">
+    <button id="sendMsg" disabled>Envoyer</button>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let localStream = null;
+    let pc = null;
+    const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }; // ajouter TURN en prod
+
+    const roomInput = document.getElementById('room');
+    const usernameInput = document.getElementById('username');
+    const joinBtn = document.getElementById('joinBtn');
+    const startCallBtn = document.getElementById('startCall');
+    const hangupBtn = document.getElementById('hangup');
+    const localVideo = document.getElementById('localVideo');
+    const remoteVideo = document.getElementById('remoteVideo');
+
+    const chatBox = document.getElementById('chat');
+    const msgInput = document.getElementById('msg');
+    const sendMsgBtn = document.getElementById('sendMsg');
+
+    let remoteId = null; // id de l'interlocuteur
+
+    joinBtn.onclick = async () => {
+      const room = roomInput.value;
+      socket.emit('join', room);
+      appendLog('Vous avez rejoint la salle: ' + room);
+      startCallBtn.disabled = false;
+      sendMsgBtn.disabled = false;
+      // obtenir micro/caméra
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        localVideo.srcObject = localStream;
+      } catch (e) {
+        alert('Impossible d\'accéder à la caméra / micro: ' + e.message);
+      }
+    };
+
+    // receive peer-joined notifications
+    socket.on('peer-joined', (id) => {
+      appendLog('Peer joined: ' + id);
+      remoteId = id;
+    });
+
+    socket.on('peer-left', (id) => {
+      appendLog('Peer left: ' + id);
+      if (remoteId === id) {
+        remoteId = null;
+        if (pc) pc.close();
+        pc = null;
+        remoteVideo.srcObject = null;
+        hangupBtn.disabled = true;
+      }
+    });
+
+    // chat
+    sendMsgBtn.onclick = () => {
+      const text = msgInput.value.trim();
+      if (!text) return;
+      const payload = { room: roomInput.value, message: text, username: usernameInput.value };
+      socket.emit('chat', payload);
+      msgInput.value = '';
+    };
+
+    socket.on('chat', (m) => {
+      const t = new Date(m.time).toLocaleTimeString();
+      appendLog(`[${t}] ${m.username || m.from}: ${m.message}`);
+    });
+
+    // Signal messages from server
+    socket.on('signal', async ({ from, data }) => {
+      console.log('signal reçu', from, data.type || '');
+      if (data.type === 'offer') {
+        // create pc if doesn't exist
+        await createPeerConnection(from);
+        await pc.setRemoteDescription(new RTCSessionDescription(data));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit('signal', { to: from, data: pc.localDescription });
+      } else if (data.type === 'answer') {
+        await pc.setRemoteDescription(new RTCSessionDescription(data));
+      } else if (data.candidate) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(data));
+        } catch (e) {
+          console.warn('addIceCandidate failed', e);
+        }
+      }
+    });
+
+    // démarrer appel (initier offer)
+    startCallBtn.onclick = async () => {
+      if (!remoteId) {
+        alert('Aucun interlocuteur dans la salle pour l\'instant.');
+        return;
+      }
+      await createPeerConnection(remoteId);
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit('signal', { to: remoteId, data: pc.localDescription });
+      hangupBtn.disabled = false;
+    };
+
+    hangupBtn.onclick = () => {
+      if (pc) {
+        pc.close();
+        pc = null;
+        remoteVideo.srcObject = null;
+      }
+      socket.emit('signal', { to: remoteId, data: { type: 'hangup' } });
+      hangupBtn.disabled = true;
+    };
+
+    async function createPeerConnection(targetId) {
+      if (pc) return;
+      pc = new RTCPeerConnection(configuration);
+
+      // ajouter tracks locaux
+      if (localStream) {
+        for (const track of localStream.getTracks()) {
+          pc.addTrack(track, localStream);
+        }
+      }
+
+      // data channel (optionnel pour chat P2P)
+      let dc;
+      if (pc.createDataChannel) {
+        dc = pc.createDataChannel('chat');
+        dc.onopen = () => console.log('DataChannel ouvert');
+        dc.onmessage = (e) => appendLog('[DC] ' + e.data);
+      }
+
+      pc.ontrack = (evt) => {
+        // peut contenir plusieurs streams
+        remoteVideo.srcObject = evt.streams[0];
+      };
+
+      pc.onicecandidate = (evt) => {
+        if (evt.candidate) {
+          socket.emit('signal', { to: targetId, data: evt.candidate });
+        }
+      };
+
+      pc.onconnectionstatechange = () => {
+        console.log('pc state', pc.connectionState);
+        if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+          hangupBtn.disabled = true;
+        }
+      };
+
+      // si une datachannel entrante
+      pc.ondatachannel = (ev) => {
+        const ch = ev.channel;
+        ch.onmessage = (e) => appendLog('[DC remote] ' + e.data);
+      };
+    }
+
+    function appendLog(txt) {
+      const el = document.createElement('div');
+      el.textContent = txt;
+      chatBox.appendChild(el);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+  </script>
 </body>
 </html>
